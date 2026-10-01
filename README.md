@@ -76,3 +76,39 @@ Expected response:
 - **Name:** Temuulen
 - **GitHub:** [Easymoneysniper111](https://github.com/Easymoneysniper111)
 
+## Scalability Demonstration (docker-compose)
+
+To demonstrate horizontal scaling, this project includes a `docker-compose.yml` 
+file that runs **3 identical instances** of the same application simultaneously.
+
+### Run multiple instances
+```bash
+sudo docker compose up -d
+```
+
+### Check running instances
+```bash
+sudo docker compose ps
+```
+
+| Instance | Port  |
+|----------|-------|
+| web1     | 8080  |
+| web2     | 8081  |
+| web3     | 8082  |
+
+### Test all instances
+```bash
+curl localhost:8080
+curl localhost:8081
+curl localhost:8082
+```
+
+All three return the same response, demonstrating that a single application 
+image can be scaled into multiple independent containers — simulating how a 
+cloud environment handles increased load by running more instances.
+
+### Stop all instances
+```bash
+sudo docker compose down
+```
