@@ -112,3 +112,49 @@ cloud environment handles increased load by running more instances.
 ```bash
 sudo docker compose down
 ```
+## Database Integration (Storage Component)
+
+To demonstrate a cloud storage component, this project integrates a 
+**MongoDB** database running in its own container. All three web instances 
+(`web1`, `web2`, `web3`) connect to the **same shared database**, 
+simulating a real-world microservices architecture where multiple 
+application instances share a common data layer.
+
+### Architecture
+
+### New API Endpoints
+
+| Endpoint      | Method | Description                        |
+|---------------|--------|--------------------------------------|
+| `/notes`      | POST   | Create a new note (saved to MongoDB) |
+| `/notes`      | GET    | Retrieve all saved notes             |
+
+### Example Usage
+
+**Create a note:**
+```bash
+curl -X POST localhost:8080/notes \
+  -H "Content-Type: application/json" \
+  -d '{"text":"My first note"}'
+```
+
+**Retrieve notes (from any instance):**
+```bash
+curl localhost:8080/notes
+curl localhost:8081/notes
+curl localhost:8082/notes
+```
+
+All three instances return the **same data**, proving that they share a 
+single, centralized MongoDB database rather than storing data locally in 
+each container.
+
+### Data Persistence
+
+The MongoDB container uses a **named Docker volume** (`mongo-data`) to 
+persist data even if the container is stopped or removed:
+```yaml
+volumes:
+  - mongo-data:/data/db
+```
+
