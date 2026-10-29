@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Notes</title>
+<style>
+  :root { --navy:#21295C; --blue:#065A82; --teal:#1C7293; --mint:#02C39A; --bg:#F4F7F9; --text:#1B2430; --muted:#5B6B7C; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, "Segoe UI", Arial, sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--navy); color:#fff; padding:28px 20px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  header h1 { margin:0 0 6px; font-size:28px; }
+  header p { margin:0; color:#b9c4dd; }
+  .badge { display:inline-block; margin-top:14px; background:var(--mint); color:var(--navy); font-weight:700; padding:6px 14px; border-radius:999px; font-size:14px; }
+  main { max-width:900px; margin:-18px auto 40px; padding:0 20px; display:grid; gap:20px; }
+  .card { background:#fff; border-radius:12px; padding:22px; box-shadow:0 2px 10px rgba(33,41,92,.08); }
+  .card h2 { margin:0 0 4px; font-size:18px; }
+  .card .sub { margin:0 0 16px; color:var(--muted); font-size:14px; }
+  button { background:var(--blue); color:#fff; border:0; border-radius:8px; padding:10px 18px; font-size:15px; cursor:pointer; }
+  button:hover { background:var(--teal); }
+  .bars { margin-top:16px; display:grid; gap:10px; }
+  .bar-row { display:grid; grid-template-columns:120px 1fr 30px; align-items:center; gap:10px; font-size:14px; }
+  .bar-bg { background:#e6ecf0; border-radius:6px; height:18px; overflow:hidden; }
+  .bar { height:100%; width:0; transition:width .4s; }
+  .row { display:flex; gap:10px; }
+  input { flex:1; padding:10px 12px; border:1px solid #cfd8de; border-radius:8px; font-size:15px; }
+  ul { list-style:none; padding:0; margin:16px 0 0; display:grid; gap:8px; }
+  li { background:var(--bg); border-left:4px solid var(--mint); padding:10px 14px; border-radius:6px; display:flex; justify-content:space-between; gap:12px; }
+  li small { color:var(--muted); white-space:nowrap; }
+  .empty { color:var(--muted); font-size:14px; }
+  footer { text-align:center; color:var(--muted); font-size:13px; padding-bottom:30px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Cloud Notes</h1>
+    <p>Docker &middot; Nginx load balancer &middot; MongoDB</p>
+    <span class="badge" id="host">Served by: ...</span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Load Balancer Demo</h2>
+    <p class="sub">Sends 12 requests through Nginx and counts which container answered.</p>
+    <button id="ping">Send 12 requests</button>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="card">
+    <h2>Notes (stored in MongoDB)</h2>
+    <p class="sub">Every container shares the same database.</p>
+    <div class="row">
+      <input id="text" placeholder="Write a note..." maxlength="120">
+      <button id="add">Add</button>
+    </div>
+    <ul id="list"></ul>
+  </section>
+</main>
+
+<footer>Nasanbat Temuulen &middot; 202438416</footer>
+
+<script>
+  const colors = ["#065A82", "#02C39A", "#E07A5F", "#8E7DBE", "#F2B134"];
+  const colorOf = {};
+  const pick = (h) => colorOf[h] || (colorOf[h] = colors[Object.keys(colorOf).length % colors.length]);
+
+  async function info() {
+    const r = await fetch("/api/info", { cache: "no-store" });
+    return (await r.json()).hostname;
+  }
+
+  async function showHost() {
+    try { document.getElementById("host").textContent = "Served by: " + await info(); }
+    catch (e) { document.getElementById("host").textContent = "Server unreachable"; }
+  }
+
+  document.getElementById("ping").onclick = async () => {
+    const counts = {};
+    for (let i = 0; i < 12; i++) {
+      try { const h = await info(); counts[h] = (counts[h] || 0) + 1; } catch (e) {}
+    }
+    const bars = document.getElementById("bars");
+    bars.innerHTML = "";
+    Object.entries(counts).forEach(([h, n]) => {
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      const label = document.createElement("span"); label.textContent = h;
+      const bg = document.createElement("div"); bg.className = "bar-bg";
+      const bar = document.createElement("div"); bar.className = "bar"; bar.style.background = pick(h);
+      bg.appendChild(bar);
+      const num = document.createElement("strong"); num.textContent = n;
+      row.append(label, bg, num);
+      bars.appendChild(row);
+      setTimeout(() => bar.style.width = (n / 12 * 100) + "%", 30);
+    });
+    showHost();
+  };
+
+    async function loadNotes() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    try {
+      const notes = await (await fetch("/notes", { cache: "no-store" })).json();
+      if (!notes.length) { list.innerHTML = '<li class="empty">No notes yet.</li>'; return; }
+      notes.forEach(n => {
+        const li = document.createElement("li");
+        const t = document.createElement("span"); t.textContent = n.text; t.style.flex = "1";
+        const d = document.createElement("small"); d.textContent = new Date(n.createdAt).toLocaleString();
+
+        const edit = document.createElement("button");
+        edit.textContent = "Edit";
+        edit.style.cssText = "padding:4px 10px;font-size:13px;";
+        edit.onclick = async () => {
+          const text = prompt("Edit note:", n.text);
+          if (text === null || !text.trim()) return;
+          await fetch("/notes/" + n._id, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text.trim() }) });
+          loadNotes();
+        };
+
+        const del = document.createElement("button");
+        del.textContent = "Delete";
+        del.style.cssText = "padding:4px 10px;font-size:13px;background:#c0392b;";
+        del.onclick = async () => {
+          await fetch("/notes/" + n._id, { method: "DELETE" });
+          loadNotes();
+        };
+
+        li.append(t, d, edit, del);
+        list.appendChild(li);
+      });
+    } catch (e) { list.innerHTML = '<li class="empty">Could not load notes.</li>'; }
+  }
+
+  document.getElementById("add").onclick = async () => {
+    const input = document.getElementById("text");
+    const text = input.value.trim();
+    if (!text) return;
+    await fetch("/notes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    input.value = "";
+    loadNotes();
+  };
+  document.getElementById("text").addEventListener("keydown", e => { if (e.key === "Enter") document.getElementById("add").click(); });
+
+  showHost();
+  loadNotes();
+</script>
+</body>
+</html>
