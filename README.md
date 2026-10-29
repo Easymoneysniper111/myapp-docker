@@ -1,160 +1,111 @@
-# MyApp - Dockerized Node.js Cloud Application
+# Cloud Notes: Dockerized Web App with Load Balancing
 
-A simple cloud-based web application built with Node.js and Express, 
-containerized with Docker, and deployed on a local Virtual Machine (Ubuntu).
-
-## Project Overview
-
-This project demonstrates a basic cloud deployment workflow:
-- A lightweight web server running inside a Virtual Machine
-- Application packaged and isolated using Docker
-- Container deployed and exposed via port mapping
+A small notes application used to demonstrate cloud concepts on a local
+Virtual Machine: containerization, load balancing, shared storage,
+healthchecks and monitoring.
 
 ## Architecture
 
-## Technologies Used
+    Browser --> Nginx :80 (load balancer)
+                  |-- web1 (Node.js) :8080
+                  |-- web2 (Node.js) :8081
+                  |-- web3 (Node.js) :8082
+                         |
+                         v
+                     MongoDB (volume: mongo-data)
 
-- **Cloud Platform/Environment:** Local VM (VMware Workstation, Ubuntu 64-bit)
-- **Containerization:** Docker
-- **Programming Language:** Node.js (Express framework)
-- **Version Control:** Git / GitHub
+    Portainer :9000 (container dashboard)
 
-## Project Structure
+Everything runs as Docker containers started by Docker Compose inside an
+Ubuntu VM (VMware Workstation).
 
-## How to Run
+## Services
 
-### 1. Clone the repository
-```bash
-git clone https://github.com/Easymoneysniper111/myapp-docker.git
-cd myapp-docker
-```
+| Service   | Purpose                                              |
+|-----------|------------------------------------------------------|
+| web1-3    | Identical Node.js/Express instances                  |
+| nginx     | Reverse proxy, round-robin load balancer on port 80  |
+| db        | MongoDB 6 with a persistent named volume             |
+| portainer | Web dashboard for viewing and controlling containers |
 
-### 2. Build the Docker image
-```bash
-sudo docker build -t myapp .
-```
+## Technologies
 
-### 3. Run the container
-```bash
-sudo docker run -d -p 8080:3000 --name myapp-container myapp
-```
+VMware Workstation, Ubuntu, Docker, Docker Compose, Nginx, Node.js,
+Express, MongoDB, Mongoose, HTML/CSS/JavaScript, Portainer, Git/GitHub.
 
-### 4. Test the application
-```bash
-curl localhost:8080
-curl localhost:8080/health
-```
+## Project structure
 
-Expected response:
+    myapp/
+    |-- app.js               Express server and REST API
+    |-- package.json
+    |-- Dockerfile
+    |-- docker-compose.yml   6 services
+    |-- nginx.conf           Load balancer configuration
+    |-- public/index.html    Browser interface
+    `-- README.md
 
-## API Endpoints
+## How to run
 
-| Endpoint   | Method | Description                     |
-|------------|--------|----------------------------------|
-| `/`        | GET    | Returns a welcome message        |
-| `/health`  | GET    | Returns server status and time   |
+    git clone https://github.com/Easymoneysniper111/myapp-docker.git
+    cd myapp-docker
+    sudo docker compose up -d --build
+    sudo docker compose ps
 
-## Cloud Concepts Demonstrated
+Open http://localhost for the web interface and http://localhost:9000
+for Portainer (create the admin user within 5 minutes of first start).
 
-- **Virtualization:** Application runs inside a VM, isolated from the host OS.
-- **Containerization:** Docker packages the app with all dependencies, 
-  ensuring consistency across environments.
-- **Portability:** The Docker image can be deployed on any machine with 
-  Docker installed, regardless of the underlying OS.
-- **Port Mapping:** Demonstrates network configuration between host and 
-  container (8080 → 3000).
+## API
 
-## Future Improvements
+| Endpoint     | Method        | Description                               |
+|--------------|---------------|-------------------------------------------|
+| /            | GET           | Web interface                             |
+| /notes       | GET, POST     | List notes, create a note                 |
+| /notes/:id   | PUT, DELETE   | Edit, delete a note                       |
+| /health      | GET           | Status used by Docker healthchecks        |
+| /metrics     | GET           | Container name, uptime, requests handled  |
+| /whoami      | GET           | Name of the container that answered       |
 
-- Add a database container (e.g., MongoDB/PostgreSQL) using `docker-compose` 
-  to demonstrate multi-container architecture and scalability.
-- Add automated deployment scripts.
-- Add logging and monitoring.
+Example:
+
+    curl -X POST localhost/notes -H "Content-Type: application/json" -d '{"text":"hello"}'
+    curl localhost/notes
+
+## Demonstrations
+
+**Load balancing.** In the browser, click "Send 12 requests": each
+container answers about a third of them. From the terminal:
+
+    for i in 1 2 3 4 5 6; do curl -s localhost/whoami; echo; done
+
+**Shared storage.** Add a note, then reload several times. Different
+containers answer, but the same data is shown, because all instances use
+one MongoDB database.
+
+**Failure.** Stop one instance and send requests again; the other two keep
+serving:
+
+    sudo docker stop myapp-web1
+    sudo docker start myapp-web1
+
+## Reliability and monitoring
+
+- Each web container has a Docker healthcheck calling /health, visible as
+  "healthy" in `docker compose ps` and in Portainer.
+- `restart: always` restarts containers that crash or after a reboot. A
+  container stopped manually stays stopped.
+- `/metrics` exposes uptime and request counts per container.
+- MongoDB data persists in the `mongo-data` volume.
+
+## Limitations
+
+- Everything runs on a single VM, so a VM failure takes down the whole
+  system. Real high availability needs several hosts.
+- MongoDB has no password. Its port is not published, so it is reachable
+  only from inside the Docker network.
+- Load balancing is simple round-robin; there is no HTTPS or autoscaling.
+- Portainer has access to the Docker socket, which is acceptable for a
+  local demo but needs care in production.
 
 ## Author
 
-- **Name:** Temuulen
-- **GitHub:** [Easymoneysniper111](https://github.com/Easymoneysniper111)
-
-## Scalability Demonstration (docker-compose)
-
-To demonstrate horizontal scaling, this project includes a `docker-compose.yml` 
-file that runs **3 identical instances** of the same application simultaneously.
-
-### Run multiple instances
-```bash
-sudo docker compose up -d
-```
-
-### Check running instances
-```bash
-sudo docker compose ps
-```
-
-| Instance | Port  |
-|----------|-------|
-| web1     | 8080  |
-| web2     | 8081  |
-| web3     | 8082  |
-
-### Test all instances
-```bash
-curl localhost:8080
-curl localhost:8081
-curl localhost:8082
-```
-
-All three return the same response, demonstrating that a single application 
-image can be scaled into multiple independent containers — simulating how a 
-cloud environment handles increased load by running more instances.
-
-### Stop all instances
-```bash
-sudo docker compose down
-```
-## Database Integration (Storage Component)
-
-To demonstrate a cloud storage component, this project integrates a 
-**MongoDB** database running in its own container. All three web instances 
-(`web1`, `web2`, `web3`) connect to the **same shared database**, 
-simulating a real-world microservices architecture where multiple 
-application instances share a common data layer.
-
-### Architecture
-
-### New API Endpoints
-
-| Endpoint      | Method | Description                        |
-|---------------|--------|--------------------------------------|
-| `/notes`      | POST   | Create a new note (saved to MongoDB) |
-| `/notes`      | GET    | Retrieve all saved notes             |
-
-### Example Usage
-
-**Create a note:**
-```bash
-curl -X POST localhost:8080/notes \
-  -H "Content-Type: application/json" \
-  -d '{"text":"My first note"}'
-```
-
-**Retrieve notes (from any instance):**
-```bash
-curl localhost:8080/notes
-curl localhost:8081/notes
-curl localhost:8082/notes
-```
-
-All three instances return the **same data**, proving that they share a 
-single, centralized MongoDB database rather than storing data locally in 
-each container.
-
-### Data Persistence
-
-The MongoDB container uses a **named Docker volume** (`mongo-data`) to 
-persist data even if the container is stopped or removed:
-```yaml
-volumes:
-  - mongo-data:/data/db
-```
-
+Nasanbat Temuulen (202438416), GitHub: Easymoneysniper111
